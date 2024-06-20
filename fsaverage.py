@@ -13,7 +13,7 @@ from correspondence import CorrespondenceSolver
 try:
     ps = __import__("polyscope")
     print("Visualization with polyscope.")
-    visualization = False
+    visualization = True
 except ImportError:
     print("Module polyscope not found. No visualization of result.")
     visualization = False
@@ -49,7 +49,7 @@ if __name__ == "__main__":
     ]
     # fsaverage3 = datasets.fetch_surf_fsaverage("fsaverage3")
     # fsaverage4 = datasets.fetch_surf_fsaverage("fsaverage4")
-    fsaverage6 = datasets.fetch_surf_fsaverage("fsaverage6")
+    fsaverage = datasets.fetch_surf_fsaverage("fsaverage3")
 
     def load_images_and_project_to_surface(image_paths, fsaverage):
         """Util function for loading and projecting volumetric images."""
@@ -62,24 +62,13 @@ if __name__ == "__main__":
         return np.stack(surface_images)
 
     featuresA = load_images_and_project_to_surface(
-        source_imgs_paths, fsaverage6
+        source_imgs_paths, fsaverage
     ).T
     featuresB = load_images_and_project_to_surface(
-        target_imgs_paths, fsaverage6
+        target_imgs_paths, fsaverage
     ).T
 
-    print(featuresA.shape)
-    print(featuresB.shape)
-
-    # fsaverage4 = datasets.fetch_surf_fsaverage("fsaverage4")
-
-    bending_weight = 1e-1
-    kmin = 1
-    kmax = 30
-    precise = False  # convert the final vertex map to a vertex-to-point map
-    exists_gt = False  # groundtruth exists
-
-    vA, fA = surface.load_surf_mesh(fsaverage6["pial_left"])
+    vA, fA = surface.load_surf_mesh(fsaverage["pial_left"])
     vB, fB = np.copy(vA), np.copy(fA)
     # Offset the left hemisphere by 10 units in x direction
     vA[:, 0] -= 100
@@ -91,8 +80,11 @@ if __name__ == "__main__":
     shapeA = Shape(vA, fA, name=nameA)
     shapeB = Shape(vB, fB, name=nameB)
 
-    # %%
-
+    bending_weight = 1e-1
+    kmin = 1
+    kmax = 30
+    precise = False  # convert the final vertex map to a vertex-to-point map
+    exists_gt = False  # groundtruth exists
     # compute correspondences using the elastic eigenmodes (elasticBasis)
     Solv_elastic = CorrespondenceSolver(
         shapeA,
@@ -103,18 +95,15 @@ if __name__ == "__main__":
         elasticBasis=True,
     )
 
-    print(shapeB.normals.shape)
-
+    # %%
     # compute final correspondences by an iterative procedure
     P, C = Solv_elastic.computeCorrespondence()
-
-    # %%
     # Refine the correspondence using the features
     P, C = Solv_elastic.refineCorrespondence(
         C,
         featuresA,
         featuresB,
-        alpha=0.0,
+        alpha=100,
         nits=10000,
     )
 
@@ -143,40 +132,75 @@ if __name__ == "__main__":
             allow_pickle=True,
         )
 
-    # use the eigenfunctions of LB operator as a comparison (this method corresponds to ZoomOut)
-    Solv_LB = CorrespondenceSolver(
-        shapeA, shapeB, kmin=kmin, kmax=kmax, LB=True
+    # %%
+    # Visualize the correspondence with nilearn
+    projected_features = featuresB[corr_ours]
+
+    fig, axes = plt.subplots(
+        2, 2, subplot_kw={"projection": "3d"}, figsize=(12, 10)
+    )
+    fig.suptitle("Functional mapping", fontsize=16)
+
+    # Plot the source features
+    plotting.plot_surf_stat_map(
+        fsaverage.pial_left,
+        featuresB[:, -1],
+        hemi="left",
+        bg_map=fsaverage.sulc_left,
+        view="lateral",
+        cmap="coolwarm",
+        axes=axes[0, 0],
+        colorbar=True,
+        title="Source features",
     )
 
-    P_LB, C_LB = Solv_LB.computeCorrespondence()
-
-    # Refine the correspondence using the features
-    P_LB, C_LB = Solv_LB.refineCorrespondence(
-        C,
-        featuresA,
-        featuresB,
-        alpha=0.0,
-        nits=10000,
+    # Plot the projected features
+    plotting.plot_surf_stat_map(
+        fsaverage.pial_left,
+        projected_features[:, -1],
+        hemi="left",
+        bg_map=fsaverage.sulc_left,
+        view="lateral",
+        cmap="coolwarm",
+        axes=axes[0, 1],
+        colorbar=True,
+        title="Projected features",
     )
 
-    # #convert mapping matrix to indices vA->vB[corr_LB]
-    corr_LB = P_LB.toarray()
-    corr_LB = np.nonzero(corr_LB.T)[1]
-
-    if precise:
-        P_prec_LB = Solv_LB.preciseMap(C_LB)
-        np.save(
-            writePath + shapeA.name + "_" + shapeB.name + "_LBPrecisemap.npy",
-            P_prec_LB,
-            allow_pickle=True,
-        )
-
-    np.savetxt(
-        writePath + shapeA.name + "_" + shapeB.name + "_LBBasisresult.txt",
-        corr_LB,
-        fmt="%d",
+    # Plot the target features
+    plotting.plot_surf_stat_map(
+        fsaverage.pial_left,
+        featuresA[:, -1],
+        hemi="left",
+        bg_map=fsaverage.sulc_left,
+        view="lateral",
+        cmap="coolwarm",
+        axes=axes[1, 0],
+        colorbar=True,
+        title="Target features",
     )
-    print("saved computed correspondence in result folder")
+
+    # Plot the difference between the source and projected features
+    plotting.plot_surf_stat_map(
+        fsaverage.pial_left,
+        featuresB[:, -1] - projected_features[:, -1],
+        hemi="left",
+        bg_map=fsaverage.sulc_left,
+        view="lateral",
+        cmap="coolwarm",
+        axes=axes[1, 1],
+        colorbar=True,
+        title="Difference between source and projected features",
+        # Threshold at 10% of the maximum value
+        threshold=3,
+    )
+
+    # plt.tight_layout(
+    #     rect=[0, 0.03, 1, 0.95]
+    # )  # Adjust layout to make room for the title
+    plt.show()
+
+    # %%
     ########visualize results#######
     if visualization:
         ps.init()
@@ -195,9 +219,6 @@ if __name__ == "__main__":
             shapeB.normals[corr_ours],
             enabled=True,
         )
-        source_mesh.add_color_quantity(
-            "LB Basis pullback normals", shapeB.normals[corr_LB], enabled=False
-        )
         target_mesh.set_position(np.array([0, 0, 1]))
 
         ps.show()
@@ -207,76 +228,3 @@ if __name__ == "__main__":
             P_prec.dot(shapeB.normals),
             enabled=True,
         )
-        source_mesh.add_color_quantity(
-            "LB precise map pullback normals",
-            P_prec_LB.dot(shapeB.normals),
-            enabled=False,
-        )
-
-    # %%
-    # Visualize the correspondence with nilearn
-    projected_features = featuresB[corr_LB]
-
-    fig, axes = plt.subplots(
-        2, 2, subplot_kw={"projection": "3d"}, figsize=(12, 10)
-    )
-    fig.suptitle("Functional mapping", fontsize=16)
-
-    # Plot the source features
-    plotting.plot_surf_stat_map(
-        fsaverage6.pial_left,
-        featuresB[:, -1],
-        hemi="left",
-        bg_map=fsaverage6.sulc_left,
-        view="lateral",
-        cmap="coolwarm",
-        axes=axes[0, 0],
-        colorbar=True,
-        title="Source features",
-    )
-
-    # Plot the projected features
-    plotting.plot_surf_stat_map(
-        fsaverage6.pial_left,
-        projected_features[:, -1],
-        hemi="left",
-        bg_map=fsaverage6.sulc_left,
-        view="lateral",
-        cmap="coolwarm",
-        axes=axes[0, 1],
-        colorbar=True,
-        title="Projected features",
-    )
-
-    # Plot the target features
-    plotting.plot_surf_stat_map(
-        fsaverage6.pial_left,
-        featuresA[:, -1],
-        hemi="left",
-        bg_map=fsaverage6.sulc_left,
-        view="lateral",
-        cmap="coolwarm",
-        axes=axes[1, 0],
-        colorbar=True,
-        title="Target features",
-    )
-
-    # Plot the difference between the source and projected features
-    plotting.plot_surf_stat_map(
-        fsaverage6.pial_left,
-        featuresB[:, -1] - projected_features[:, -1],
-        hemi="left",
-        bg_map=fsaverage6.sulc_left,
-        view="lateral",
-        cmap="coolwarm",
-        axes=axes[1, 1],
-        colorbar=True,
-        title="Difference between source and projected features",
-        # Threshold at 10% of the maximum value
-        threshold=3,
-    )
-
-    # plt.tight_layout(
-    #     rect=[0, 0.03, 1, 0.95]
-    # )  # Adjust layout to make room for the title
-    plt.show()
