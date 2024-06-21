@@ -8,10 +8,7 @@ from tqdm import tqdm  # progress bar
 
 
 def loss(C, A, B, eigA, eigB, alpha=1e-4):
-    return (
-        torch.norm(C @ A - B) ** 2
-        + alpha * torch.norm(C @ eigA - C @ eigB) ** 2
-    )
+    return torch.norm(C @ A - B) ** 2 + alpha * torch.norm(C @ eigA - C @ eigB) ** 2
 
 
 class CorrespondenceSolver:
@@ -88,30 +85,22 @@ class CorrespondenceSolver:
             self.basisString = "elastic basis"
 
             if shapeA.elasticBasis is None:
-                shapeA.computeElasticBasis(
-                    k=kmax, bending_weight=bending_weight
-                )
+                shapeA.computeElasticBasis(k=kmax, bending_weight=bending_weight)
             self.basisA = shapeA.elasticBasis
             if self.basisA.shape[1] < kmax:
                 print(
                     "Not enough precomputed basis vectors for kmax. Basis is recomputed"
                 )
-                shapeA.computeElasticBasis(
-                    k=kmax, bending_weight=bending_weight
-                )
+                shapeA.computeElasticBasis(k=kmax, bending_weight=bending_weight)
             self.basisA = shapeA.elasticBasis
             if shapeB.elasticBasis is None:
-                shapeB.computeElasticBasis(
-                    k=kmax, bending_weight=bending_weight
-                )
+                shapeB.computeElasticBasis(k=kmax, bending_weight=bending_weight)
             self.basisB = shapeB.elasticBasis
             if self.basisB.shape[1] < kmax:
                 print(
                     "Not enough precomputed basis vectors for kmax. Basis is recomputed"
                 )
-                shapeB.computeElasticBasis(
-                    k=kmax, bending_weight=bending_weight
-                )
+                shapeB.computeElasticBasis(k=kmax, bending_weight=bending_weight)
             self.basisB = shapeB.elasticBasis
 
         self.kmax = kmax
@@ -162,9 +151,7 @@ class CorrespondenceSolver:
 
         if self.LBBasis:
             # take advantage that basisA, basisB are orthonormal w.r.t weighted scalar product
-            C = self.basisA[:, :k].T.dot(
-                self.massA.dot(P.T.dot(self.basisB[:, :k]))
-            )
+            C = self.basisA[:, :k].T.dot(self.massA.dot(P.T.dot(self.basisB[:, :k])))
         else:
             C = np.linalg.pinv(self.sqrtmassA.dot(self.basisA[:, :k])).dot(
                 self.sqrtmassA.dot(P.T.dot(self.basisB[:, :k]))
@@ -189,9 +176,7 @@ class CorrespondenceSolver:
             B = self.basisB[:, :k].T.dot(self.massB.dot(self.basisB[:, :k]))
             sqrtA = scipy.linalg.sqrtm(A)
 
-            dataB = sqrtA.dot(
-                C.dot(np.linalg.inv(B).dot(self.basisB[:, :k].T))
-            ).T
+            dataB = sqrtA.dot(C.dot(np.linalg.inv(B).dot(self.basisB[:, :k].T))).T
             dataA = np.linalg.inv(sqrtA).dot(self.basisA[:, :k].T).T
 
         if self.LBBasis:
@@ -266,9 +251,7 @@ class CorrespondenceSolver:
 
         if P is None:
             if C is None:
-                print(
-                    "no init is given, an identity functional map will be used"
-                )
+                print("no init is given, an identity functional map will be used")
                 C = np.identity(self.kmin)
 
             P = self.p2pfromFuncMap(C)
@@ -299,12 +282,8 @@ class CorrespondenceSolver:
         C = torch.tensor(C, dtype=torch.float32, requires_grad=True)
         k = C.shape[0]
         optimizer = torch.optim.Adam([C], lr=0.1)
-        deltaA = torch.diag(
-            torch.tensor(self.shapeA.Evalues[:k], dtype=torch.float32)
-        )
-        deltaB = torch.diag(
-            torch.tensor(self.shapeB.Evalues[:k], dtype=torch.float32)
-        )
+        deltaA = torch.diag(torch.tensor(self.shapeA.Evalues[:k], dtype=torch.float32))
+        deltaB = torch.diag(torch.tensor(self.shapeB.Evalues[:k], dtype=torch.float32))
 
         projected_featuresA = torch.tensor(
             self.basisA[:, :k].T @ featuresA, dtype=torch.float32

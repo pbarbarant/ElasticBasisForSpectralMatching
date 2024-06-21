@@ -45,9 +45,7 @@ if __name__ == "__main__":
     )
 
     source_imgs_paths = brain_data["cmaps"][0 : len(contrasts)]
-    target_imgs_paths = brain_data["cmaps"][
-        len(contrasts) : 2 * len(contrasts)
-    ]
+    target_imgs_paths = brain_data["cmaps"][len(contrasts) : 2 * len(contrasts)]
     fsaverage = datasets.fetch_surf_fsaverage("fsaverage6")
 
     def load_images_and_project_to_surface(image_paths, fsaverage):
@@ -60,12 +58,8 @@ if __name__ == "__main__":
 
         return np.stack(surface_images)
 
-    featuresA = load_images_and_project_to_surface(
-        source_imgs_paths, fsaverage
-    ).T
-    featuresB = load_images_and_project_to_surface(
-        target_imgs_paths, fsaverage
-    ).T
+    featuresA = load_images_and_project_to_surface(source_imgs_paths, fsaverage).T
+    featuresB = load_images_and_project_to_surface(target_imgs_paths, fsaverage).T
 
     vA, fA = surface.load_surf_mesh(fsaverage["pial_left"])
     vB, fB = np.copy(vA), np.copy(fA)
@@ -120,9 +114,7 @@ if __name__ == "__main__":
     # Visualize the correspondence with nilearn
     projected_features = featuresB[corr_ours]
 
-    fig, axes = plt.subplots(
-        2, 2, subplot_kw={"projection": "3d"}, figsize=(12, 10)
-    )
+    fig, axes = plt.subplots(2, 2, subplot_kw={"projection": "3d"}, figsize=(12, 10))
     fig.suptitle("Functional mapping", fontsize=16)
 
     # Plot the source features

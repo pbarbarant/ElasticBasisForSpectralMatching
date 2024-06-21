@@ -33,13 +33,13 @@ def computeEVLaplace(v, f, k, nonzero=True):
 
 def computeEV(v, f, k, bending_weight=1e-4, sigma=None, which=None, nonzero=True):
     """
-    Compute eigenvectors of shell hessian 
+    Compute eigenvectors of shell hessian
         Args:
             fix (optional): vertex indices for boundary values
 
         returns:
             vals : eigenvalues
-            vecs: eigenvectors 3n x k 
+            vecs: eigenvectors 3n x k
     """
 
     f = f.astype(np.int32)
@@ -47,7 +47,7 @@ def computeEV(v, f, k, bending_weight=1e-4, sigma=None, which=None, nonzero=True
     uE, EMAP, EF, EI = igl.edge_flaps(f)
     # massmatrix
     M = igl.massmatrix(v, f, igl.MASSMATRIX_TYPE_VORONOI)
-    M = scipy.sparse.block_diag((M, M, M), format='lil')
+    M = scipy.sparse.block_diag((M, M, M), format="lil")
     k = k + 6
 
     hess = pyshell.shell_deformed_hessian(v, v, f, uE, EMAP, EF, EI, bending_weight)
@@ -55,18 +55,24 @@ def computeEV(v, f, k, bending_weight=1e-4, sigma=None, which=None, nonzero=True
     if sigma is None:
         if which is None:
             sigma = 0
-            which = 'LM'
+            which = "LM"
             vals, vecs = linalg.eigsh(hess, k, M=M, sigma=sigma, which=which)
         else:
             vals, vecs = linalg.eigsh(hess, k, M=M, which=which)
     else:
         vals, vecs = linalg.eigsh(hess, k, M=M, sigma=sigma)
 
-    if nonzero:  # remove vecs corresponding to zero vals (six dimensional kernel due to rigid body motions)
+    if (
+        nonzero
+    ):  # remove vecs corresponding to zero vals (six dimensional kernel due to rigid body motions)
         ind = vals > 1e-8
 
         if np.sum(ind) < k - 6:
-            print('mesh has probably irregularities, found ' + str(k - 6 - np.sum(ind)) + 'many EF with zero EV')
+            print(
+                "mesh has probably irregularities, found "
+                + str(k - 6 - np.sum(ind))
+                + "many EF with zero EV"
+            )
             # vals,vecs =  linalg.eigsh(hess, k+np.sum(ind)-6,M=M,sigma = sigma,which = which)
             ind = vals > 1e-8
 
@@ -93,7 +99,9 @@ def projectOnNormals(v, f, function):
 
     normals = igl.per_vertex_normals(v, f)
 
-    proj = [normals[i] * np.dot(function[i], normals[i]) for i in range(normals.shape[0])]
+    proj = [
+        normals[i] * np.dot(function[i], normals[i]) for i in range(normals.shape[0])
+    ]
 
     return proj
 
@@ -103,14 +111,14 @@ def projection(normals):
     Create a projection matrix for projection on vertex normals
         args:
             normals: m x 3
-        
+
         returns:
-            P: projection matrix 3*m x m 
-    
+            P: projection matrix 3*m x m
+
     """
     # normals in m x 3
     m = normals.shape[0]
-    P = scipy.sparse.lil_matrix((3 * m, m), dtype='d')
+    P = scipy.sparse.lil_matrix((3 * m, m), dtype="d")
     for j in range(m):
         P[j, j] = normals[j, 0]
         P[j + m, j] = normals[j, 1]

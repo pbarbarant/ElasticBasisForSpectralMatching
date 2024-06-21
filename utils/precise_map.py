@@ -27,24 +27,27 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+
 import numpy as np
 import scipy.spatial.distance
 from tqdm import tqdm  # progress bar
 import scipy.sparse as sparse
 
 
-def precise_map(shapeA, shapeB, basisA, basisB, C, orth=False, precompute_dmin=True, n_jobs=6):
+def precise_map(
+    shapeA, shapeB, basisA, basisB, C, orth=False, precompute_dmin=True, n_jobs=6
+):
     """
-        Computes a vertex-to-point map from a given functional map C. 
+        Computes a vertex-to-point map from a given functional map C.
 
     Args    query_point = np.linalg.inv(sqrtA).dot(basisA[vertind,:k1].T).T # (k1,)
     ----------------------------
-    shapeA          : Source shape 
+    shapeA          : Source shape
     shapeB          : Target shape
     basisA          : Used basis of shapeA for functional map computation
     basisB          : Used basis of shapeB for functional map computation
     C               : (k1,k2) Functional map from shapeB to shapeA
-    orth            : Whether basis is orthonormal or not 
+    orth            : Whether basis is orthonormal or not
     precompute_dmin : Whether to precompute all the values of delta_min.
                       Faster but heavier in memory
 
@@ -58,21 +61,37 @@ def precise_map(shapeA, shapeB, basisA, basisB, C, orth=False, precompute_dmin=T
     face_match = np.zeros(n1, dtype=int)
     bary_coord = np.zeros((n1, 3))
 
-    print('Compute lmax')
-    lmax = compute_lmax(shapeA, shapeB, basisA, basisB, C, orth=orth)  # (n_f2,) for each face on shapeB
+    print("Compute lmax")
+    lmax = compute_lmax(
+        shapeA, shapeB, basisA, basisB, C, orth=orth
+    )  # (n_f2,) for each face on shapeB
 
-    print('Compute Deltamin')
-    Deltamin = compute_Deltamin(shapeA, shapeB, basisA, basisB, C, orth=orth, n_jobs=n_jobs)  # (n1,)
+    print("Compute Deltamin")
+    Deltamin = compute_Deltamin(
+        shapeA, shapeB, basisA, basisB, C, orth=orth, n_jobs=n_jobs
+    )  # (n1,)
 
     dmin = None
     if precompute_dmin:
-        print('Precompute dmin')
-        dmin = compute_dmin(shapeA, shapeB, basisA, basisB, C, orth=orth, vertind=None)  # (n_f2,n1)
+        print("Precompute dmin")
+        dmin = compute_dmin(
+            shapeA, shapeB, basisA, basisB, C, orth=orth, vertind=None
+        )  # (n_f2,n1)
 
     # Iterate along all points
     for vertind in tqdm(range(n1)):
-        faceind, bary = project_to_mesh(shapeA, shapeB, basisA, basisB, C, vertind, lmax, Deltamin, orth=orth,
-                                        dmin=dmin)
+        faceind, bary = project_to_mesh(
+            shapeA,
+            shapeB,
+            basisA,
+            basisB,
+            C,
+            vertind,
+            lmax,
+            Deltamin,
+            orth=orth,
+            dmin=dmin,
+        )
         face_match[vertind] = faceind
         bary_coord[vertind] = bary
 
@@ -104,7 +123,9 @@ def compute_lmax(shapeA, shapeB, basisA, basisB, C, orth=False):
         B = np.identity(k2)
     sqrtA = scipy.linalg.sqrtm(A)
 
-    ev0 = sqrtA.dot(C.dot(np.linalg.inv(B).dot(basisB[shapeB.f[:, 0], :k2].T))).T  # facesB x k2
+    ev0 = sqrtA.dot(
+        C.dot(np.linalg.inv(B).dot(basisB[shapeB.f[:, 0], :k2].T))
+    ).T  # facesB x k2
     ev1 = sqrtA.dot(C.dot(np.linalg.inv(B).dot(basisB[shapeB.f[:, 1], :k2].T))).T
     ev2 = sqrtA.dot(C.dot(np.linalg.inv(B).dot(basisB[shapeB.f[:, 2], :k2].T))).T
     # Compute edge lengths in embedding space
@@ -201,7 +222,9 @@ def compute_dmin(shapeA, shapeB, basisA, basisB, C, orth=False, vertind=None):
         return np.min(np.hstack([term1, term2, term3]), axis=1)  # (m1,)
 
 
-def project_to_mesh(shapeA, shapeB, basisA, basisB, C, vertind, lmax, Deltamin, orth=False, dmin=None):
+def project_to_mesh(
+    shapeA, shapeB, basisA, basisB, C, vertind, lmax, Deltamin, orth=False, dmin=None
+):
     """
     Project a vertex of the source mesh to a face on the target mesh using its embedding.
 
@@ -225,7 +248,9 @@ def project_to_mesh(shapeA, shapeB, basisA, basisB, C, vertind, lmax, Deltamin, 
 
     # Obtain deltamin
     if dmin is None:
-        deltamin = compute_dmin(shapeA, shapeB, basisA, basisB, C, orth=orth, vertind=vertind)
+        deltamin = compute_dmin(
+            shapeA, shapeB, basisA, basisB, C, orth=orth, vertind=vertind
+        )
     else:
         deltamin = dmin[:, vertind]  # (m1,)
 
@@ -242,14 +267,20 @@ def project_to_mesh(shapeA, shapeB, basisA, basisB, C, vertind, lmax, Deltamin, 
     sqrtA = scipy.linalg.sqrtm(A)
     dataA = np.linalg.inv(sqrtA).dot(basisA[:, :k1].T).T
     # query_triangles =np.linalg.inv(sqrtA).dot(basisA[: ,:k1].T)[:,shapeA.f[query_faceinds]]# (p, 3,k1)
-    query_triangles = sqrtA.dot(C.dot(np.linalg.inv(B).dot(basisB[:, :k2].T)))[:, shapeB.f[query_faceinds]]  # (p, 3,k2)
+    query_triangles = sqrtA.dot(C.dot(np.linalg.inv(B).dot(basisB[:, :k2].T)))[
+        :, shapeB.f[query_faceinds]
+    ]  # (p, 3,k2)
     query_triangles = np.swapaxes(query_triangles, 1, 2).T
     query_point = np.linalg.inv(sqrtA).dot(basisA[vertind, :k1].T).T  # (k1,)
     if len(query_faceinds) == 1:
-        min_dist, proj, min_bary = pointTriangleDistance(query_triangles.squeeze(), query_point, return_bary=True)
+        min_dist, proj, min_bary = pointTriangleDistance(
+            query_triangles.squeeze(), query_point, return_bary=True
+        )
         return query_faceinds, min_bary
 
-    dists, proj, bary_coords = point_to_triangles_projection(query_triangles, query_point, return_bary=True)
+    dists, proj, bary_coords = point_to_triangles_projection(
+        query_triangles, query_point, return_bary=True
+    )
 
     min_ind = dists.argmin()
 
@@ -284,7 +315,9 @@ def barycentric_to_precise(shapeA, shapeB, face_match, bary_coord):
     Jn = np.concatenate([v0, v1, v2])
     Sn = np.concatenate([bary_coord[:, 0], bary_coord[:, 1], bary_coord[:, 2]])
 
-    precise_map = sparse.coo_matrix((Sn, (In, Jn)), shape=(shapeA.nVert, shapeB.nVert)).tocsc()
+    precise_map = sparse.coo_matrix(
+        (Sn, (In, Jn)), shape=(shapeA.nVert, shapeB.nVert)
+    ).tocsc()
     return precise_map
 
 
@@ -347,14 +380,14 @@ def point_to_triangles_projection(triangles, point, return_bary=False):
 
     #  Precompute quantities with notations from [1]
 
-    a = np.einsum('ij,ij->i', axis1, axis1)  # (m,)
-    b = np.einsum('ij,ij->i', axis1, axis2)  # (m,)
-    c = np.einsum('ij,ij->i', axis2, axis2)  # (m,)
-    d = np.einsum('ij,ij->i', axis1, diff)  # (m,)
-    e = np.einsum('ij,ij->i', axis2, diff)  # (m,)
-    f = np.einsum('ij,ij->i', diff, diff)  # (m,)
+    a = np.einsum("ij,ij->i", axis1, axis1)  # (m,)
+    b = np.einsum("ij,ij->i", axis1, axis2)  # (m,)
+    c = np.einsum("ij,ij->i", axis2, axis2)  # (m,)
+    d = np.einsum("ij,ij->i", axis1, diff)  # (m,)
+    e = np.einsum("ij,ij->i", axis2, diff)  # (m,)
+    f = np.einsum("ij,ij->i", diff, diff)  # (m,)
 
-    det = a * c - b ** 2  # (m,)
+    det = a * c - b**2  # (m,)
     s = b * e - c * d  # (m,)
     t = b * d - a * e  # (m,)
 
@@ -366,7 +399,7 @@ def point_to_triangles_projection(triangles, point, return_bary=False):
     # Find for which triangles which zone the point belongs to
 
     # s + t <= det
-    test1 = (s + t <= det)  # (m,) with (m1) True values
+    test1 = s + t <= det  # (m,) with (m1) True values
     inds_0345 = np.where(test1)[0]  # (m1)
     inds_126 = np.where(~test1)[0]  # (m-m1)
 
@@ -407,11 +440,11 @@ def point_to_triangles_projection(triangles, point, return_bary=False):
         # FIRST PART - SUBDIVIDE IN 2
         final_t[inds4_1] = 0  # Useless already done
 
-        test4_11 = (-d[inds4_1] >= a[inds4_1])
+        test4_11 = -d[inds4_1] >= a[inds4_1]
         inds4_11 = inds4_1[test4_11]
         inds4_12 = inds4_1[~test4_11]
 
-        final_s[inds4_11] = 1.
+        final_s[inds4_11] = 1.0
         final_dists[inds4_11] = a[inds4_11] + 2.0 * d[inds4_11] + f[inds4_11]
 
         final_s[inds4_12] = -d[inds4_12] / a[inds4_12]
@@ -420,7 +453,7 @@ def point_to_triangles_projection(triangles, point, return_bary=False):
         # SECOND PART - SUBDIVIDE IN 2
         final_s[inds4_2] = 0  # Useless already done
 
-        test4_21 = (e[inds4_2] >= 0)
+        test4_21 = e[inds4_2] >= 0
         inds4_21 = inds4_2[test4_21]
         inds4_22 = inds4_2[~test4_21]
 
@@ -428,7 +461,7 @@ def point_to_triangles_projection(triangles, point, return_bary=False):
         final_dists[inds4_21] = f[inds4_21]
 
         # SECOND PART OF SECOND PART - SUBDIVIDE IN 2
-        test4_221 = (-e[inds4_22] >= c[inds4_22])
+        test4_221 = -e[inds4_22] >= c[inds4_22]
         inds4_221 = inds4_22[test4_221]
         inds4_222 = inds4_22[~test4_221]
 
@@ -451,7 +484,7 @@ def point_to_triangles_projection(triangles, point, return_bary=False):
 
         # SECOND PART - SUBDIVIDE IN 2
 
-        test3_21 = (-e[inds3_2] >= c[inds3_2])
+        test3_21 = -e[inds3_2] >= c[inds3_2]
         inds3_21 = inds3_2[test3_21]
         inds3_22 = inds3_2[~test3_21]
 
@@ -461,7 +494,9 @@ def point_to_triangles_projection(triangles, point, return_bary=False):
         final_dists[inds3_21] = c[inds3_21] + 2.0 * e[inds3_21] + f[inds3_21]
 
         final_t[inds3_22] = -e[inds3_22] / c[inds3_22]
-        final_dists[inds3_22] = e[inds3_22] * final_t[inds3_22] + f[inds3_22]  # -e*t ????
+        final_dists[inds3_22] = (
+            e[inds3_22] * final_t[inds3_22] + f[inds3_22]
+        )  # -e*t ????
 
     if len(inds_5) > 0:
         # print('Case 5', inds_5)
@@ -474,7 +509,7 @@ def point_to_triangles_projection(triangles, point, return_bary=False):
         final_s[inds5_1] = 0
         final_dists[inds5_1] = f[inds5_1]
 
-        test5_21 = (-d[inds5_2] >= a[inds5_2])
+        test5_21 = -d[inds5_2] >= a[inds5_2]
         inds5_21 = inds5_2[test5_21]
         inds5_22 = inds5_2[~test5_21]
 
@@ -489,11 +524,21 @@ def point_to_triangles_projection(triangles, point, return_bary=False):
         invDet = 1.0 / det[inds_0]
         final_s[inds_0] = s[inds_0] * invDet
         final_t[inds_0] = t[inds_0] * invDet
-        final_dists[inds_0] = final_s[inds_0] * (
-                    a[inds_0] * final_s[inds_0] + b[inds_0] * final_t[inds_0] + 2.0 * d[inds_0]) + \
-                              final_t[inds_0] * (
-                                          b[inds_0] * final_s[inds_0] + c[inds_0] * final_t[inds_0] + 2.0 * e[inds_0]) + \
-                              f[inds_0]
+        final_dists[inds_0] = (
+            final_s[inds_0]
+            * (
+                a[inds_0] * final_s[inds_0]
+                + b[inds_0] * final_t[inds_0]
+                + 2.0 * d[inds_0]
+            )
+            + final_t[inds_0]
+            * (
+                b[inds_0] * final_s[inds_0]
+                + c[inds_0] * final_t[inds_0]
+                + 2.0 * e[inds_0]
+            )
+            + f[inds_0]
+        )
 
     if len(inds_2) > 0:
         # print('Case 2', inds_2)
@@ -508,7 +553,7 @@ def point_to_triangles_projection(triangles, point, return_bary=False):
         numer = tmp1[test2_1] - tmp0[test2_1]
         denom = a[inds2_1] - 2.0 * b[inds2_1] + c[inds2_1]
 
-        test2_11 = (numer >= denom)
+        test2_11 = numer >= denom
         inds2_11 = inds2_1[test2_11]
         inds2_12 = inds2_1[~test2_11]
 
@@ -518,26 +563,36 @@ def point_to_triangles_projection(triangles, point, return_bary=False):
 
         final_s[inds2_12] = numer[~test2_11] / denom[~test2_11]
         final_t[inds2_12] = 1 - final_s[inds2_12]
-        final_dists[inds2_12] = final_s[inds2_12] * (
-                    a[inds2_12] * final_s[inds2_12] + b[inds2_12] * final_t[inds2_12] + 2 * d[inds2_12]) + \
-                                final_t[inds2_12] * (
-                                            b[inds2_12] * final_s[inds2_12] + c[inds2_12] * final_t[inds2_12] + 2 * e[
-                                        inds2_12]) + f[inds2_12]
+        final_dists[inds2_12] = (
+            final_s[inds2_12]
+            * (
+                a[inds2_12] * final_s[inds2_12]
+                + b[inds2_12] * final_t[inds2_12]
+                + 2 * d[inds2_12]
+            )
+            + final_t[inds2_12]
+            * (
+                b[inds2_12] * final_s[inds2_12]
+                + c[inds2_12] * final_t[inds2_12]
+                + 2 * e[inds2_12]
+            )
+            + f[inds2_12]
+        )
 
-        final_s[inds2_2] = 0.
+        final_s[inds2_2] = 0.0
 
-        test2_21 = (tmp1[~test2_1] <= 0.)
+        test2_21 = tmp1[~test2_1] <= 0.0
         inds2_21 = inds2_2[test2_21]
         inds2_22 = inds2_2[~test2_21]
 
         final_t[inds2_21] = 1
         final_dists[inds2_21] = c[inds2_21] + 2.0 * e[inds2_21] + f[inds2_21]
 
-        test2_221 = (e[inds2_22] >= 0.)
+        test2_221 = e[inds2_22] >= 0.0
         inds2_221 = inds2_22[test2_221]
         inds2_222 = inds2_22[~test2_221]
 
-        final_t[inds2_221] = 0.
+        final_t[inds2_221] = 0.0
         final_dists[inds2_221] = f[inds2_221]
 
         final_t[inds2_222] = -e[inds2_222] / c[inds2_222]
@@ -555,7 +610,7 @@ def point_to_triangles_projection(triangles, point, return_bary=False):
         numer = tmp1[test6_1] - tmp0[test6_1]
         denom = a[inds6_1] - 2.0 * b[inds6_1] + c[inds6_1]
 
-        test6_11 = (numer >= denom)
+        test6_11 = numer >= denom
         inds6_11 = inds6_1[test6_11]
         inds6_12 = inds6_1[~test6_11]
 
@@ -565,26 +620,36 @@ def point_to_triangles_projection(triangles, point, return_bary=False):
 
         final_t[inds6_12] = numer[~test6_11] / denom[~test6_11]
         final_s[inds6_12] = 1 - final_t[inds6_12]
-        final_dists[inds6_12] = final_s[inds6_12] * (
-                    a[inds6_12] * final_s[inds6_12] + b[inds6_12] * final_t[inds6_12] + 2.0 * d[inds6_12]) + \
-                                final_t[inds6_12] * (
-                                            b[inds6_12] * final_s[inds6_12] + c[inds6_12] * final_t[inds6_12] + 2.0 * e[
-                                        inds6_12]) + f[inds6_12]
+        final_dists[inds6_12] = (
+            final_s[inds6_12]
+            * (
+                a[inds6_12] * final_s[inds6_12]
+                + b[inds6_12] * final_t[inds6_12]
+                + 2.0 * d[inds6_12]
+            )
+            + final_t[inds6_12]
+            * (
+                b[inds6_12] * final_s[inds6_12]
+                + c[inds6_12] * final_t[inds6_12]
+                + 2.0 * e[inds6_12]
+            )
+            + f[inds6_12]
+        )
 
-        final_t[inds6_2] = 0.
+        final_t[inds6_2] = 0.0
 
-        test6_21 = (tmp1[~test6_1] <= 0.)
+        test6_21 = tmp1[~test6_1] <= 0.0
         inds6_21 = inds6_2[test6_21]
         inds6_22 = inds6_2[~test6_21]
 
         final_s[inds6_21] = 1
         final_dists[inds6_21] = a[inds6_21] + 2.0 * d[inds6_21] + f[inds6_21]
 
-        test6_221 = (d[inds6_22] >= 0.)
+        test6_221 = d[inds6_22] >= 0.0
         inds6_221 = inds6_22[test6_221]
         inds6_222 = inds6_22[~test6_221]
 
-        final_s[inds6_221] = 0.
+        final_s[inds6_221] = 0.0
         final_dists[inds6_221] = f[inds6_221]
 
         final_s[inds6_222] = -d[inds6_222] / a[inds6_222]
@@ -604,7 +669,7 @@ def point_to_triangles_projection(triangles, point, return_bary=False):
 
         denom = a[inds1_2] - 2.0 * b[inds1_2] + c[inds1_2]
 
-        test1_21 = (numer[~test1_1] >= denom)
+        test1_21 = numer[~test1_1] >= denom
         # print(denom, numer, numer[~test1_1], test1_21, inds1_2)
         inds1_21 = inds1_2[test1_21]
         inds1_22 = inds1_2[~test1_21]
@@ -615,19 +680,35 @@ def point_to_triangles_projection(triangles, point, return_bary=False):
 
         final_s[inds1_22] = numer[~test1_1][~test1_21] / denom[~test1_21]
         final_t[inds1_22] = 1 - final_s[inds1_22]
-        final_dists[inds1_22] = final_s[inds1_22] * (
-                    a[inds1_22] * final_s[inds1_22] + b[inds1_22] * final_t[inds1_22] + 2.0 * d[inds1_22]) + \
-                                final_t[inds1_22] * (
-                                            b[inds1_22] * final_s[inds1_22] + c[inds1_22] * final_t[inds1_22] + 2.0 * e[
-                                        inds1_22]) + f[inds1_22]
+        final_dists[inds1_22] = (
+            final_s[inds1_22]
+            * (
+                a[inds1_22] * final_s[inds1_22]
+                + b[inds1_22] * final_t[inds1_22]
+                + 2.0 * d[inds1_22]
+            )
+            + final_t[inds1_22]
+            * (
+                b[inds1_22] * final_s[inds1_22]
+                + c[inds1_22] * final_t[inds1_22]
+                + 2.0 * e[inds1_22]
+            )
+            + f[inds1_22]
+        )
 
     final_dists[final_dists < 0] = 0
     final_dists = np.sqrt(final_dists)
 
     projections = bases + final_s[:, None] * axis1 + final_t[:, None] * axis2
     if return_bary:
-        bary_coords = np.concatenate([1 - final_s[:, None] - final_t[:, None], final_s[:, None], final_t[:, None]],
-                                     axis=1)
+        bary_coords = np.concatenate(
+            [
+                1 - final_s[:, None] - final_t[:, None],
+                final_s[:, None],
+                final_t[:, None],
+            ],
+            axis=1,
+        )
         return final_dists, projections, bary_coords
 
     return final_dists, projections
@@ -784,7 +865,8 @@ def pointTriangleDistance(TRI, P, return_bary=False):
                 else:
                     if -d >= a:
                         s = 1
-                        sqrdistance = a + 2.0 * d + f;  # GF 20101013 fixed typo d*s ->2*d
+                        sqrdistance = a + 2.0 * d + f
+                        # GF 20101013 fixed typo d*s ->2*d
                     else:
                         s = -d / a
                         sqrdistance = d * s + f
@@ -793,7 +875,9 @@ def pointTriangleDistance(TRI, P, return_bary=False):
                 invDet = 1.0 / det
                 s = s * invDet
                 t = t * invDet
-                sqrdistance = s * (a * s + b * t + 2.0 * d) + t * (b * s + c * t + 2.0 * e) + f
+                sqrdistance = (
+                    s * (a * s + b * t + 2.0 * d) + t * (b * s + c * t + 2.0 * e) + f
+                )
     else:
         if s < 0.0:
             # region 2
@@ -805,11 +889,14 @@ def pointTriangleDistance(TRI, P, return_bary=False):
                 if numer >= denom:
                     s = 1.0
                     t = 0.0
-                    sqrdistance = a + 2.0 * d + f;  # GF 20101014 fixed typo 2*b -> 2*d
+                    sqrdistance = a + 2.0 * d + f
+                    # GF 20101014 fixed typo 2*b -> 2*d
                 else:
                     s = numer / denom
                     t = 1 - s
-                    sqrdistance = s * (a * s + b * t + 2 * d) + t * (b * s + c * t + 2 * e) + f
+                    sqrdistance = (
+                        s * (a * s + b * t + 2 * d) + t * (b * s + c * t + 2 * e) + f
+                    )
 
             else:  # minimum on edge s=0
                 s = 0.0
@@ -839,7 +926,11 @@ def pointTriangleDistance(TRI, P, return_bary=False):
                     else:
                         t = numer / denom
                         s = 1 - t
-                        sqrdistance = s * (a * s + b * t + 2.0 * d) + t * (b * s + c * t + 2.0 * e) + f
+                        sqrdistance = (
+                            s * (a * s + b * t + 2.0 * d)
+                            + t * (b * s + c * t + 2.0 * e)
+                            + f
+                        )
 
                 else:
                     t = 0.0
@@ -869,7 +960,11 @@ def pointTriangleDistance(TRI, P, return_bary=False):
                     else:
                         s = numer / denom
                         t = 1 - s
-                        sqrdistance = s * (a * s + b * t + 2.0 * d) + t * (b * s + c * t + 2.0 * e) + f
+                        sqrdistance = (
+                            s * (a * s + b * t + 2.0 * d)
+                            + t * (b * s + c * t + 2.0 * e)
+                            + f
+                        )
 
     # account for numerical round-off error
     if sqrdistance < 0:
