@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import os
 import matplotlib.pyplot as plt
 from nilearn import datasets, surface, image, plotting
+from scipy.sparse import csr_matrix
 
 from correspondence import Shape
 from correspondence import CorrespondenceSolver
@@ -47,9 +48,7 @@ if __name__ == "__main__":
     target_imgs_paths = brain_data["cmaps"][
         len(contrasts) : 2 * len(contrasts)
     ]
-    # fsaverage3 = datasets.fetch_surf_fsaverage("fsaverage3")
-    # fsaverage4 = datasets.fetch_surf_fsaverage("fsaverage4")
-    fsaverage = datasets.fetch_surf_fsaverage("fsaverage3")
+    fsaverage = datasets.fetch_surf_fsaverage("fsaverage6")
 
     def load_images_and_project_to_surface(image_paths, fsaverage):
         """Util function for loading and projecting volumetric images."""
@@ -92,7 +91,7 @@ if __name__ == "__main__":
         kmin=kmin,
         kmax=kmax,
         bending_weight=bending_weight,
-        elasticBasis=True,
+        elasticBasis=False,
     )
 
     # %%
@@ -108,29 +107,14 @@ if __name__ == "__main__":
     )
 
     # convert mapping matrix to indices vA->vB[corr_ours]
-    corr_ours = P.toarray()
-    corr_ours = np.nonzero(corr_ours.T)[1]
-    np.savetxt(
-        writePath
-        + shapeA.name
-        + "_"
-        + shapeB.name
-        + "_ElasticBasisresult.txt",
-        corr_ours,
-        fmt="%d",
-    )
+    # Assuming P is a sparse matrix in CSR format
+    P = csr_matrix(P)
 
-    if precise:
-        P_prec = Solv_elastic.preciseMap(C)
-        np.save(
-            writePath
-            + shapeA.name
-            + "_"
-            + shapeB.name
-            + "ElasticPrecisemap.npy",
-            P_prec,
-            allow_pickle=True,
-        )
+    # Get the non-zero indices in the transposed matrix
+    rows, cols = P.T.nonzero()
+    corr_ours = cols
+
+    # %%
 
     # %%
     # Visualize the correspondence with nilearn
@@ -213,18 +197,13 @@ if __name__ == "__main__":
         )
 
         # normal transfer
+        normal_diff = shapeB.normals[corr_ours] - shapeA.normals
         target_mesh.add_color_quantity("normals", shapeB.normals, enabled=True)
         source_mesh.add_color_quantity(
             "elastic Basis pullback normals",
-            shapeB.normals[corr_ours],
+            normal_diff,
             enabled=True,
         )
         target_mesh.set_position(np.array([0, 0, 1]))
 
         ps.show()
-    if precise:
-        source_mesh.add_color_quantity(
-            "elastic precise map pullback normals",
-            P_prec.dot(shapeB.normals),
-            enabled=True,
-        )
